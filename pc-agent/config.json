@@ -1,0 +1,12 @@
+{
+  "jupyter_watchdog": true,
+  "jupyter_watchdog_interval_sec": 15,
+  "metrics_interval_sec": 30,
+  "metrics_retention_hours": 48,
+  "process_snapshot_interval_sec": 60,
+  "auto_commit_enabled": false,
+  "auto_commit_interval_min": 60,
+  "auto_commit_message_prefix": "auto: ",
+  "allowed_origins": ["*"],
+  "_comment": "Secrets (JUPYTER_TOKEN, AGENT_API_KEY, paths, ports) are in ../.env"
+}

@@ -1,0 +1,37 @@
+# === SECRETS ===
+.env
+.env.local
+.env.production
+API_KEY.txt
+
+# === DATABASE ===
+*.db
+*.db-wal
+*.db-shm
+data/
+
+# === LOGS ===
+logs/
+*.log
+jupyter.log
+
+# === NODE ===
+node_modules/
+.next/
+out/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === EDITOR ===
+.vscode/settings.json
+*.swp
+*.swo
+
+# === AGENT ===
+pc-agent/agent.db
+pc-agent/API_KEY.txt
+pc-agent/jupyter.log
+pc-agent/*.log
