@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import CommandPaletteProvider from '@/components/command/CommandPaletteProvider';
+import SessionLockWrapper from '@/components/layout/SessionLockWrapper';
 
 async function getProject(id: string) {
   try {
@@ -35,6 +36,7 @@ export default async function ProjectLayout({ children, params }: Props) {
       </div>
 
       <CommandPaletteProvider projectId={projectId} />
+      <SessionLockWrapper />
     </div>
   );
 }

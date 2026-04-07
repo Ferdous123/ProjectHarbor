@@ -59,6 +59,14 @@ const SETTINGS_GROUPS: Array<{ icon: React.ElementType; label: string; fields: S
       { key: 'autosave_interval_sec', label: 'Autosave interval (sec)', type: 'text' },
     ],
   },
+  {
+    icon: Clock,
+    label: 'Session Lock',
+    fields: [
+      { key: 'lock_timeout_minutes', label: 'Lock after inactivity', type: 'select', options: ['0', '15', '30', '60'] },
+      { key: 'lock_passphrase', label: 'Passphrase (blank = no password)', type: 'text' },
+    ],
+  },
 ];
 
 type SettingsMap = Record<string, string>;

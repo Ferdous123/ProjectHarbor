@@ -11,6 +11,12 @@ type KernelStatus = 'idle' | 'busy' | 'starting' | 'dead' | 'reconnecting';
 type MsgCallback = {
   cellId: string;
   onComplete: () => void;
+  silent?: false;
+} | {
+  cellId: '__silent__';
+  onComplete: (stdout: string) => void;
+  silent: true;
+  stdout: string[];
 };
 
 export interface KernelCallbacks {
@@ -99,32 +105,41 @@ export function useKernel(projectId: string, notebookPath: string, callbacks: Ke
               setStatus(msg.content.execution_state as KernelStatus);
               break;
             case 'stream':
-              if (cellId) callbacks.onStream(cellId, msg.content.name, msg.content.text);
+              if (pending?.silent && msg.content.name === 'stdout') {
+                pending.stdout.push(msg.content.text);
+              } else if (cellId) {
+                callbacks.onStream(cellId, msg.content.name, msg.content.text);
+              }
               break;
             case 'execute_result':
-              if (cellId) callbacks.onExecuteResult(cellId, msg.content.data, msg.content.execution_count);
+              if (cellId && !pending?.silent) callbacks.onExecuteResult(cellId, msg.content.data, msg.content.execution_count);
               break;
             case 'display_data':
-              if (cellId) callbacks.onDisplayData(cellId, msg.content.data);
+              if (cellId && !pending?.silent) callbacks.onDisplayData(cellId, msg.content.data);
               break;
             case 'update_display_data':
-              if (cellId) callbacks.onDisplayData(cellId, msg.content.data);
+              if (cellId && !pending?.silent) callbacks.onDisplayData(cellId, msg.content.data);
               break;
             case 'error':
-              if (cellId) callbacks.onError(cellId, msg.content.ename, msg.content.evalue, msg.content.traceback);
+              if (cellId && !pending?.silent) callbacks.onError(cellId, msg.content.ename, msg.content.evalue, msg.content.traceback);
               break;
             case 'execute_input':
-              if (cellId) callbacks.onExecuteInput(cellId, msg.content.execution_count);
+              if (cellId && !pending?.silent) callbacks.onExecuteInput(cellId, msg.content.execution_count);
               break;
             case 'clear_output':
-              if (cellId) callbacks.onClearOutput(cellId);
+              if (cellId && !pending?.silent) callbacks.onClearOutput(cellId);
               break;
           }
         } else if (msg.channel === 'shell') {
           if (msg.header.msg_type === 'execute_reply' && msgId && pending) {
-            pending.onComplete();
+            if (pending.silent) {
+              const stdout = pending.stdout.join('');
+              pending.onComplete(stdout);
+            } else {
+              (pending.onComplete as () => void)();
+              callbacks.onCellComplete(pending.cellId);
+            }
             pendingMsgs.current.delete(msgId);
-            callbacks.onCellComplete(pending.cellId);
           }
         }
       } catch { /* ignore parse errors */ }
@@ -159,6 +174,39 @@ export function useKernel(projectId: string, notebookPath: string, callbacks: Ke
     });
   }, []);
 
+  // ── Silent execute (for variable inspector) ──
+  const executeSilent = useCallback((code: string): Promise<string | null> => {
+    return new Promise((resolve) => {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        resolve(null);
+        return;
+      }
+      const msg = createJupyterMessage('execute_request', {
+        code,
+        silent: true,
+        store_history: false,
+        user_expressions: {},
+        allow_stdin: false,
+        stop_on_error: false,
+      }, sessionIdRef.current, 'shell');
+
+      pendingMsgs.current.set(msg.header.msg_id, {
+        cellId: '__silent__',
+        silent: true,
+        stdout: [],
+        onComplete: (stdout: string) => resolve(stdout || null),
+      });
+      wsRef.current.send(JSON.stringify(msg));
+      // Timeout after 10s
+      setTimeout(() => {
+        if (pendingMsgs.current.has(msg.header.msg_id)) {
+          pendingMsgs.current.delete(msg.header.msg_id);
+          resolve(null);
+        }
+      }, 10000);
+    });
+  }, []);
+
   // ── Interrupt (REST, not WS — E2) ──
   const interrupt = useCallback(async () => {
     if (!kernelId) return;
@@ -184,5 +232,5 @@ export function useKernel(projectId: string, notebookPath: string, callbacks: Ke
     setTimeout(connect, 1000);
   }, [kernelId, projectId, connect]);
 
-  return { status, kernelId, isConnected, execute, interrupt, restart, sessionId: sessionIdRef.current };
+  return { status, kernelId, isConnected, execute, executeSilent, interrupt, restart, sessionId: sessionIdRef.current };
 }

@@ -1,16 +1,26 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bell, X, Check, CheckCheck, Info, AlertTriangle, AlertCircle, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 
 interface Notification {
   id: string;
   type: string;
   title: string;
   body?: string;
+  message?: string;
   isRead: boolean;
   createdAt: string;
+  metadata?: string;
+}
+
+interface Action {
+  label: string;
+  href?: string;
+  action?: () => void;
 }
 
 const icons: Record<string, React.ReactNode> = {
@@ -20,27 +30,56 @@ const icons: Record<string, React.ReactNode> = {
   success: <CheckCircle className="w-3.5 h-3.5 text-accent-green" />,
 };
 
+function getNotificationActions(
+  type: string,
+  metadata: Record<string, any>,
+  projectId: string,
+  interruptKernel: () => void,
+  restartKernel: () => void
+): Action[] {
+  switch (type) {
+    case 'jupyter_crash':
+      return [{ label: 'View Logs', href: `/projects/${projectId}/logs` }];
+    case 'git_conflict':
+    case 'backup_failure':
+      return [{ label: 'Open Git', href: `/projects/${projectId}/git` }];
+    case 'kernel_stuck':
+      return [
+        { label: 'Interrupt', action: interruptKernel },
+        { label: 'Restart', action: restartKernel },
+      ];
+    case 'disk_alert':
+      return [{ label: 'View Files', href: `/projects/${projectId}/files` }];
+    case 'job_failure':
+      return [{ label: 'View Job', href: `/projects/${projectId}` }];
+    default:
+      return [];
+  }
+}
+
 export default function NotificationsPanel({ projectId }: { projectId: string }) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unread, setUnread] = useState(0);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const load = async () => {
-    const r = await fetch(`/api/v1/projects/${projectId}/notifications`);
-    const d = await r.json();
-    const items: Notification[] = d.data ?? [];
-    setNotifications(items);
-    setUnread(items.filter((n) => !n.isRead).length);
+    try {
+      const r = await fetch(`/api/v1/projects/${projectId}/notifications`);
+      const d = await r.json();
+      const items: Notification[] = d.data ?? [];
+      setNotifications(items);
+      setUnread(items.filter((n) => !n.isRead).length);
+    } catch {}
   };
 
   useEffect(() => {
     load();
     const id = setInterval(load, 15000);
     return () => clearInterval(id);
-  }, [projectId]);
+  }, [projectId]); // eslint-disable-line
 
-  // Click outside to close
   useEffect(() => {
     if (!open) return;
     const handler = (e: MouseEvent) => {
@@ -69,6 +108,10 @@ export default function NotificationsPanel({ projectId }: { projectId: string })
     });
     load();
   };
+
+  // Stub kernel actions — these would be wired up via context in a full impl
+  const interruptKernel = () => toast.info('Navigate to Notebook to interrupt kernel');
+  const restartKernel = () => toast.info('Navigate to Notebook to restart kernel');
 
   return (
     <div className="relative" ref={panelRef}>
@@ -111,23 +154,57 @@ export default function NotificationsPanel({ projectId }: { projectId: string })
             {notifications.length === 0 ? (
               <p className="text-xs text-text-tertiary text-center py-6">No notifications</p>
             ) : (
-              notifications.map((n) => (
-                <div
-                  key={n.id}
-                  className={`px-3 py-2.5 border-b border-bg-4/50 flex items-start gap-2 hover:bg-bg-2 cursor-default ${n.isRead ? 'opacity-60' : ''}`}
-                  onClick={() => !n.isRead && markRead(n.id)}
-                >
-                  <span className="mt-0.5 shrink-0">{icons[n.type] ?? icons.info}</span>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-text-primary font-medium truncate">{n.title}</p>
-                    {n.body && <p className="text-xs text-text-tertiary mt-0.5 line-clamp-2">{n.body}</p>}
-                    <p className="text-xs text-text-tertiary/70 mt-0.5">
-                      {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+              notifications.map((n) => {
+                let meta: Record<string, any> = {};
+                try { meta = JSON.parse(n.metadata ?? '{}'); } catch {}
+                const actions = getNotificationActions(n.type, meta, projectId, interruptKernel, restartKernel);
+
+                return (
+                  <div
+                    key={n.id}
+                    className={`px-3 py-2.5 border-b border-bg-4/50 hover:bg-bg-2 ${n.isRead ? 'opacity-60' : ''}`}
+                    onClick={() => !n.isRead && markRead(n.id)}
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="mt-0.5 shrink-0">{icons[n.type] ?? icons.info}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-text-primary font-medium truncate">{n.title}</p>
+                        {(n.body || n.message) && (
+                          <p className="text-xs text-text-tertiary mt-0.5 line-clamp-2">{n.body ?? n.message}</p>
+                        )}
+                        <p className="text-xs text-text-tertiary/70 mt-0.5">
+                          {new Date(n.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                        {/* R5: Action buttons */}
+                        {actions.length > 0 && (
+                          <div className="flex gap-1 mt-1.5 flex-wrap">
+                            {actions.map((a, i) => (
+                              a.href ? (
+                                <button
+                                  key={i}
+                                  onClick={(e) => { e.stopPropagation(); setOpen(false); router.push(a.href!); }}
+                                  className="text-xs px-2 py-0.5 rounded border border-bg-4 hover:border-accent-blue hover:text-accent-blue text-text-secondary transition-colors"
+                                >
+                                  {a.label}
+                                </button>
+                              ) : (
+                                <button
+                                  key={i}
+                                  onClick={(e) => { e.stopPropagation(); a.action?.(); }}
+                                  className="text-xs px-2 py-0.5 rounded border border-bg-4 hover:border-accent-blue hover:text-accent-blue text-text-secondary transition-colors"
+                                >
+                                  {a.label}
+                                </button>
+                              )
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-accent-blue shrink-0 mt-1.5" />}
+                    </div>
                   </div>
-                  {!n.isRead && <span className="w-1.5 h-1.5 rounded-full bg-accent-blue shrink-0 mt-1.5" />}
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

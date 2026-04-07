@@ -12,6 +12,36 @@ export function startScheduler(): void {
     } catch { /* non-fatal */ }
   });
 
+  // R8b: Auto git push — every 30 minutes (if enabled per project)
+  cron.schedule('*/30 * * * *', async () => {
+    try {
+      const { projectService } = await import('@/server/services/project.service');
+      const { gitBackupWithRetry } = await import('@/server/services/backup.service');
+      const { notificationService } = await import('@/server/services/notification.service');
+      const projects = await projectService.listProjects();
+      for (const project of projects) {
+        try {
+          const settings = await projectService.getSettings(project.id);
+          const autoGit = settings['backup.autoGitPush'];
+          if (autoGit !== 'true') continue;
+          const dir = project.remoteDir;
+          if (!dir) continue;
+          const result = await gitBackupWithRetry(project.id, dir, 3);
+          if (!result.ok && result.error) {
+            await notificationService.create({
+              projectId: project.id,
+              type: 'backup_failure',
+              title: 'Auto git push failed',
+              message: result.error,
+              severity: 'error',
+              metadata: { label: 'git_push', error: result.error },
+            });
+          }
+        } catch { /* skip individual project errors */ }
+      }
+    } catch { /* non-fatal */ }
+  });
+
   console.log('[scheduler] Started');
 }
 

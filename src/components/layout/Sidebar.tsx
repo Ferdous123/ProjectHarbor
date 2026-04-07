@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard, Terminal, FolderOpen, GitBranch,
   Box, BookOpen, FileText, Clock, StickyNote,
-  Settings, ChevronRight, Activity,
+  Settings, ChevronRight, Activity, ScrollText,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -19,6 +19,7 @@ const NAV_ITEMS = [
   { href: '/processes', label: 'Processes',   icon: Activity },
   { href: '/schedules', label: 'Schedules',   icon: Clock },
   { href: '/notes',     label: 'Notes',       icon: StickyNote },
+  { href: '/logs',      label: 'Logs',        icon: ScrollText },
   { href: '/settings',  label: 'Settings',    icon: Settings },
 ];
 

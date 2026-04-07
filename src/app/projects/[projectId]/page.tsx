@@ -3,6 +3,8 @@ import QuickActions from '@/components/dashboard/QuickActions';
 import JobList from '@/components/dashboard/JobList';
 import AgentBanner from '@/components/dashboard/AgentBanner';
 import ActivityTimeline from '@/components/dashboard/ActivityTimeline';
+import QuickNote from '@/components/dashboard/QuickNote';
+import BackupStatusPanel from '@/components/dashboard/BackupStatusPanel';
 
 type Props = { params: Promise<{ projectId: string }> };
 
@@ -18,6 +20,10 @@ export default async function ProjectDashboard({ params }: Props) {
         <JobList projectId={projectId} />
       </div>
       <ActivityTimeline projectId={projectId} />
+      <div className="grid md:grid-cols-2 gap-4">
+        <BackupStatusPanel projectId={projectId} />
+        <QuickNote />
+      </div>
     </div>
   );
 }

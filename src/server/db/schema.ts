@@ -350,3 +350,22 @@ export const appSettings = sqliteTable('app_settings', {
   value:     text('value').notNull().default(''),
   updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
 });
+
+// ============================================================
+// backup_history  (R8b: 3-layer backup tracking)
+// ============================================================
+export const backupHistory = sqliteTable(
+  'backup_history',
+  {
+    id:          text('id').primaryKey(),
+    projectId:   text('project_id').notNull().references(() => projects.id, { onDelete: 'cascade' }),
+    backupType:  text('backup_type').notNull(),   // 'git_push' | 'local_copy' | 'harbor_backup'
+    status:      text('status').notNull(),         // 'success' | 'failed' | 'partial'
+    message:     text('message'),                  // commit hash or error
+    filesCount:  integer('files_count'),
+    sizeBytes:   integer('size_bytes'),
+    durationMs:  integer('duration_ms'),
+    createdAt:   integer('created_at').notNull(),  // unix timestamp
+  },
+  (t) => [index('idx_backup_history_project').on(t.projectId)]
+);

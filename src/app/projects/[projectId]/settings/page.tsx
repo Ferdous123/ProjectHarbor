@@ -27,6 +27,9 @@ const SETTINGS_FIELDS: Array<{ key: string; label: string; placeholder?: string;
   { section: 'Git', key: 'git.branch', label: 'Branch', placeholder: 'main' },
   // Notebook
   { section: 'Notebook', key: 'notebook.path', label: 'Default Notebook Path' },
+  // Backup (R8b)
+  { section: 'Backup', key: 'backup.autoGitPush', label: 'Auto Git Push (true/false)', placeholder: 'false' },
+  { section: 'Backup', key: 'backup.localPath', label: 'Local Backup Path', placeholder: 'F:\\Backups\\ProjectHarbor' },
 ];
 
 export default function SettingsPage() {

@@ -39,10 +39,13 @@ GitHub:       username = Ferdous123
 ```
 
 ## Current state
-- Phase 1-15 + L1/L2/L3: Complete, 0 TS errors, clean build
-- Last audit: 2026-04-07 (comprehensive hardening pass + file browser enhancements)
+- ALL features complete (R1-R11, B1-B12)
+- Last audit: 2026-04-07 (final completion pass)
 - TypeScript: 0 errors
 - Build: Clean
+- Secret scan: Clean
+- README: Updated
+- Status: PRODUCTION READY
 
 ## Completed this session (2026-04-07 hardening pass)
 - Fixed .env to system-level only (GITHUB_TOKEN, GITHUB_USERNAME, AGENT_PORT, AGENT_API_KEY, PORT, NODE_ENV)
@@ -82,14 +85,29 @@ GitHub:       username = Ferdous123
 - Created ActivityTimeline component (F9) showing recent jobs on dashboard
 - Added ActivityTimeline to dashboard page
 
-## Known issues (from spec, still outstanding)
-- Markdown rendering in cells uses plain text (no react-markdown) - double-click editing works
-- No find/replace (Ctrl+F/Ctrl+H) in notebook
-- No variable inspector sidebar
-- No F8 checkpoint restore UI (backend done, UI not added to notebook)
-- No L6 (unified log viewer page)
-- No F10 (inline notification action buttons)
-- No E1b create-GitHub-repo wizard integration (standalone GitHub page exists)
+## Completed this final pass (2026-04-07)
+- R1: Find/Replace bar in notebook (Ctrl+F/Ctrl+H, multi-cell search, replace/replace-all)
+- R2: Variable inspector sidebar (Ctrl+Shift+H, silent kernel execute, auto-refresh on idle)
+- R3: Checkpoint restore UI in toolbar (history dropdown, confirm + restore + reload)
+- R4: Unified log viewer page (/logs, tabs: Agent/Jupyter/System, filter, auto-refresh, copy)
+- R5: Notification action buttons (contextual links to logs, git, kernel actions)
+- R6: GitHub repo creation in project wizard (create/link/skip, private/public, auto-name)
+- R7: Markdown rendering with ReactMarkdown + GFM + KaTeX math in notebook cells
+- R8: Export menu (.ipynb/.py/.html) in toolbar dropdown
+- R8b: BackgroundTaskRunner pattern + BackupStatusPanel on dashboard
+- R8c: Backup retry logic with 3-attempt backoff, conflict auto-resolution
+- R8d-e: Git backup with 4-step SSE progress streaming (stage/commit/push/verify)
+- R8f-h: Backup failure notifications, backup_history table, migration added
+- R9: Session lock screen (configurable timeout, optional passphrase, in app settings)
+- R10: Quick note widget on dashboard (auto-saves to app_settings, debounced 2s)
+- R11: Project templates (ML Training, Data Analysis, Paper Writing, None)
+- Added Logs nav entry to sidebar
+- Added backup.autoGitPush setting to project settings page
+- Added auto-git-push cron (every 30min) to scheduler
+- Updated README.md with full feature documentation
+
+## Known issues
+- None
 
 ## Critical Errata (from spec)
 - E1: Kernel messages need ALL header fields (msg_id, session, username, date, msg_type, version, channel) - DONE

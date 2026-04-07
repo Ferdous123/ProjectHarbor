@@ -5,6 +5,10 @@ import { python } from '@codemirror/lang-python';
 import { markdown } from '@codemirror/lang-markdown';
 import { oneDark } from '@codemirror/theme-one-dark';
 import { Play, ChevronUp, ChevronDown, Trash2, ChevronRight } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
 import { cn } from '@/lib/utils';
 import CellOutput from './CellOutput';
 import type { Cell as CellType } from '@/types';
@@ -12,6 +16,7 @@ import type { Cell as CellType } from '@/types';
 interface Props {
   cell: CellType;
   isActive: boolean;
+  highlighted?: boolean;
   onSelect: () => void;
   onRun: () => void;
   onSourceChange: (source: string) => void;
@@ -31,7 +36,7 @@ function ExecutionCount({ cell }: { cell: CellType }) {
 }
 
 const Cell = memo(function Cell({
-  cell, isActive, onSelect, onRun, onSourceChange, onDelete, onMoveUp, onMoveDown, onTypeChange, onToggleOutput,
+  cell, isActive, highlighted, onSelect, onRun, onSourceChange, onDelete, onMoveUp, onMoveDown, onTypeChange, onToggleOutput,
 }: Props) {
   const [editingMarkdown, setEditingMarkdown] = useState(false);
   const extensions = cell.type === 'markdown' ? [markdown()] : [python()];
@@ -44,7 +49,7 @@ const Cell = memo(function Cell({
 
   return (
     <div
-      className={cn('group relative border border-bg-4 rounded mb-1 bg-bg-2', borderClass)}
+      className={cn('group relative border border-bg-4 rounded mb-1 bg-bg-2', borderClass, highlighted && 'ring-1 ring-yellow-400/50')}
       onClick={onSelect}
     >
       <div className="flex items-start gap-2 px-2 pt-1.5 pb-0">
@@ -72,7 +77,16 @@ const Cell = memo(function Cell({
               className="prose prose-invert prose-sm max-w-none cursor-text py-1 min-h-[1.5rem]"
               onDoubleClick={() => setEditingMarkdown(true)}
             >
-              {cell.source || <span className="text-text-tertiary italic text-xs">Double-click to edit markdown</span>}
+              {cell.source ? (
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm, remarkMath]}
+                  rehypePlugins={[rehypeKatex]}
+                >
+                  {cell.source}
+                </ReactMarkdown>
+              ) : (
+                <span className="text-text-tertiary italic text-xs">Double-click to edit markdown</span>
+              )}
             </div>
           ) : (
             <CodeMirror
