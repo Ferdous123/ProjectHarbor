@@ -39,8 +39,8 @@ GitHub:       username = Ferdous123
 ```
 
 ## Current state
-- Phase 1-15: Complete, 0 TS errors, clean build
-- Last audit: 2026-04-07 (comprehensive hardening pass)
+- Phase 1-15 + L1/L2/L3: Complete, 0 TS errors, clean build
+- Last audit: 2026-04-07 (comprehensive hardening pass + file browser enhancements)
 - TypeScript: 0 errors
 - Build: Clean
 
@@ -86,7 +86,6 @@ GitHub:       username = Ferdous123
 - Markdown rendering in cells uses plain text (no react-markdown) - double-click editing works
 - No find/replace (Ctrl+F/Ctrl+H) in notebook
 - No variable inspector sidebar
-- No L1 (CSV preview), L2 (image gallery), L3 (file search) in file browser
 - No F8 checkpoint restore UI (backend done, UI not added to notebook)
 - No L6 (unified log viewer page)
 - No F10 (inline notification action buttons)
