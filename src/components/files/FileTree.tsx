@@ -6,6 +6,7 @@ import type { FileEntry } from '@/types';
 interface Props {
   projectId: string;
   onSelectFile: (path: string) => void;
+  onSelectDir?: (path: string) => void;
   selectedPath?: string;
 }
 
@@ -26,10 +27,12 @@ async function loadDir(projectId: string, path: string): Promise<TreeNode[]> {
 }
 
 function TreeEntry({
-  node, depth, projectId, onSelectFile, selectedPath, onToggle,
+  node, depth, projectId, onSelectFile, onSelectDir, selectedPath, onToggle,
 }: {
   node: TreeNode; depth: number; projectId: string;
-  onSelectFile: (path: string) => void; selectedPath?: string;
+  onSelectFile: (path: string) => void;
+  onSelectDir?: (path: string) => void;
+  selectedPath?: string;
   onToggle: (node: TreeNode) => void;
 }) {
   const isDir = node.type === 'directory';
@@ -40,7 +43,7 @@ function TreeEntry({
       <div
         className={`flex items-center gap-1 px-2 py-0.5 cursor-pointer hover:bg-bg-3 text-xs transition-colors ${isSelected ? 'bg-bg-3 text-accent-blue' : 'text-text-secondary'}`}
         style={{ paddingLeft: `${8 + depth * 12}px` }}
-        onClick={() => isDir ? onToggle(node) : onSelectFile(node.path)}
+        onClick={() => { if (isDir) { onToggle(node); onSelectDir?.(node.path); } else { onSelectFile(node.path); } }}
       >
         {isDir ? (
           <>
@@ -62,6 +65,7 @@ function TreeEntry({
           depth={depth + 1}
           projectId={projectId}
           onSelectFile={onSelectFile}
+          onSelectDir={onSelectDir}
           selectedPath={selectedPath}
           onToggle={onToggle}
         />
@@ -70,7 +74,7 @@ function TreeEntry({
   );
 }
 
-export default function FileTree({ projectId, onSelectFile, selectedPath }: Props) {
+export default function FileTree({ projectId, onSelectFile, onSelectDir, selectedPath }: Props) {
   const [nodes, setNodes] = useState<TreeNode[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -101,6 +105,7 @@ export default function FileTree({ projectId, onSelectFile, selectedPath }: Prop
           depth={0}
           projectId={projectId}
           onSelectFile={onSelectFile}
+          onSelectDir={onSelectDir}
           selectedPath={selectedPath}
           onToggle={handleToggle}
         />

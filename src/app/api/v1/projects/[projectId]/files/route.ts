@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import path from 'path';
 import { projectService } from '@/server/services/project.service';
 import { fileService } from '@/server/services/file.service';
 import { apiHandler } from '@/lib/api-handler';
@@ -20,6 +21,25 @@ export const GET = apiHandler(async (req: NextRequest, ctx: Ctx) => {
   if (action === 'read') {
     const content = await fileService.readFile(project.remoteDir, relPath);
     return NextResponse.json({ data: { content } });
+  }
+  if (action === 'raw') {
+    const buffer = await fileService.readFileBuffer(project.remoteDir, relPath);
+    const ext = path.extname(relPath).slice(1).toLowerCase();
+    const MIME: Record<string, string> = {
+      png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+      gif: 'image/gif', svg: 'image/svg+xml', webp: 'image/webp',
+      bmp: 'image/bmp', pdf: 'application/pdf',
+    };
+    const contentType = MIME[ext] ?? 'application/octet-stream';
+    return new NextResponse(new Uint8Array(buffer), {
+      headers: { 'Content-Type': contentType, 'Cache-Control': 'private, max-age=60' },
+    });
+  }
+  if (action === 'search') {
+    const q = url.searchParams.get('q') ?? '';
+    const ext = url.searchParams.get('ext') ?? '';
+    const results = await fileService.searchFiles(project.remoteDir, q, ext || undefined);
+    return NextResponse.json({ data: results });
   }
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 });
 });
