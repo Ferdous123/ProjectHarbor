@@ -9,7 +9,12 @@
       "Bash(npm cache:*)",
       "Bash(npm config:*)",
       "Bash(npm install:*)",
-      "Bash(npm i:*)"
+      "Bash(npm i:*)",
+      "Bash(npx tsc:*)",
+      "Bash(mkdir -p \"f:/Research_Paper_Projects/ProjectHarbor/src/app/api/v1/projects/[projectId]/journal\")",
+      "Bash(mkdir -p \"f:/Research_Paper_Projects/ProjectHarbor/src/app/api/v1/projects/[projectId]/journal/[entryId]\")",
+      "Bash(mkdir -p \"f:/Research_Paper_Projects/ProjectHarbor/src/app/api/v1/projects/[projectId]/todos\")",
+      "Bash(mkdir -p \"f:/Research_Paper_Projects/ProjectHarbor/src/app/api/v1/projects/[projectId]/todos/[todoId]\")"
     ]
   }
 }

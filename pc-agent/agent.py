@@ -19,8 +19,9 @@ from contextlib import contextmanager
 try:
     from flask import Flask, jsonify, request, Response
     import psutil
+    import requests as req_lib
 except ImportError:
-    print("Missing dependencies. Run: pip install flask psutil")
+    print("Missing dependencies. Run: pip install flask psutil requests")
     sys.exit(1)
 
 # === PATHS ===
@@ -85,8 +86,8 @@ def write_env_key(path, key, value):
 
 # === CONFIG ===
 def load_config():
-    """Load non-sensitive settings from config.json, secrets from .env"""
-    # Defaults (non-sensitive only)
+    """Load all settings from config.json. Load ONLY agent-level secrets from .env."""
+    # Defaults — jupyter settings come from config.json, NOT .env
     cfg = {
         "bind_host": "0.0.0.0",
         "jupyter_watchdog": True,
@@ -99,32 +100,37 @@ def load_config():
         "auto_commit_repo_path": "",
         "auto_commit_message_prefix": "auto: ",
         "allowed_origins": ["*"],
+        # Jupyter defaults — override in config.json
+        "jupyter_token": "changeme",
+        "jupyter_port": 8888,
+        "jupyter_env_path": "",
+        "jupyter_notebook_dir": "",
     }
 
-    # Load config.json overrides
+    # Load config.json overrides (including jupyter settings)
     if CONFIG_PATH.exists():
         with open(CONFIG_PATH) as f:
             user = json.load(f)
         # Skip _comment keys
         cfg.update({k: v for k, v in user.items() if not k.startswith("_")})
 
-    # Load secrets + paths from .env
+    # Load ONLY agent-level secrets from .env (AGENT_PORT, AGENT_API_KEY)
     env = load_env(ENV_PATH)
-    cfg["jupyter_token"] = env.get("JUPYTER_TOKEN", "changeme")
-    cfg["jupyter_port"] = int(env.get("JUPYTER_PORT", "8888"))
-    cfg["agent_port"] = int(env.get("AGENT_PORT", "9111"))
+    cfg["agent_port"] = int(env.get("AGENT_PORT", str(cfg.get("agent_port", 9111))))
     cfg["api_key"] = env.get("AGENT_API_KEY", "")
-    cfg["jupyter_env_path"] = env.get("JUPYTER_ENV_PATH", "")
-    cfg["jupyter_notebook_dir"] = env.get("JUPYTER_NOTEBOOK_DIR", "")
+    # Auto-commit repo can come from either source
     cfg["auto_commit_repo_path"] = env.get("AUTO_COMMIT_REPO", cfg.get("auto_commit_repo_path", ""))
 
     return cfg
 
 def save_config(cfg):
-    """Save only non-sensitive settings to config.json."""
-    safe_keys = ["jupyter_watchdog", "jupyter_watchdog_interval_sec", "metrics_interval_sec",
-                 "metrics_retention_hours", "process_snapshot_interval_sec", "auto_commit_enabled",
-                 "auto_commit_interval_min", "auto_commit_message_prefix", "allowed_origins", "bind_host"]
+    """Save settings to config.json (jupyter settings included, secrets excluded)."""
+    safe_keys = [
+        "jupyter_watchdog", "jupyter_watchdog_interval_sec", "metrics_interval_sec",
+        "metrics_retention_hours", "process_snapshot_interval_sec", "auto_commit_enabled",
+        "auto_commit_interval_min", "auto_commit_message_prefix", "allowed_origins", "bind_host",
+        "jupyter_token", "jupyter_port", "jupyter_env_path", "jupyter_notebook_dir",
+    ]
     safe = {k: cfg[k] for k in safe_keys if k in cfg}
     with open(CONFIG_PATH, "w") as f:
         json.dump(safe, f, indent=2)
@@ -136,7 +142,9 @@ def get_db():
     conn = sqlite3.connect(str(DB_PATH), timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")   # faster than FULL, still crash-safe
     conn.execute("PRAGMA foreign_keys=ON")
+    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")  # compact WAL on open
     return conn
 
 def init_db():
@@ -358,7 +366,9 @@ def start_jupyter():
         "--ServerApp.allow_credentials=True",
         "--ServerApp.port_retries=0",
         f"--IdentityProvider.token={token}",
-        f"--notebook-dir={nb_dir}"
+        f"--notebook-dir={nb_dir}",
+        "--ServerApp.websocket_ping_interval=30000",   # 30s ping interval
+        "--ServerApp.websocket_ping_timeout=15000",    # 15s timeout (must be < interval)
     ]
 
     log.info(f"Starting Jupyter on port {port}")
@@ -559,6 +569,88 @@ class AutoCommitThread(threading.Thread):
                 log.error(f"Auto-commit error: {e}")
             time.sleep(config["auto_commit_interval_min"] * 60)
 
+# === KERNEL HEALTH MONITOR ===
+class KernelHealthMonitor(threading.Thread):
+    """Detects and logs stuck kernels. Runs every 10s."""
+    daemon = True
+
+    def run(self):
+        while True:
+            try:
+                if not is_jupyter_running():
+                    time.sleep(10)
+                    continue
+
+                port = config["jupyter_port"]
+                token = config["jupyter_token"]
+                base = f"http://127.0.0.1:{port}"
+                headers = {"Authorization": f"token {token}"}
+
+                resp = req_lib.get(f"{base}/api/sessions", headers=headers, timeout=5)
+                if resp.status_code != 200:
+                    time.sleep(10)
+                    continue
+
+                for session in resp.json():
+                    kernel_id = session.get("kernel", {}).get("id")
+                    if not kernel_id:
+                        continue
+                    kresp = req_lib.get(
+                        f"{base}/api/kernels/{kernel_id}",
+                        headers=headers, timeout=5
+                    )
+                    if kresp.status_code != 200:
+                        continue
+                    kernel = kresp.json()
+                    exec_state = kernel.get("execution_state", "idle")
+                    if exec_state not in ("idle", "starting"):
+                        log.debug(f"Kernel {kernel_id[:8]} state: {exec_state}")
+            except Exception as e:
+                log.debug(f"Kernel health check: {e}")
+            time.sleep(10)
+
+
+# === STARTUP RECOVERY ===
+def startup_recovery():
+    """Run on every agent start. Handles post-crash state."""
+    log.info("Running startup recovery...")
+
+    # 1. Clean stale PID file
+    if PID_PATH.exists():
+        try:
+            old_pid = int(PID_PATH.read_text().strip())
+            if not psutil.pid_exists(old_pid):
+                PID_PATH.unlink()
+                log.info(f"Cleaned stale PID file (old PID: {old_pid})")
+        except Exception:
+            PID_PATH.unlink(missing_ok=True)
+
+    # 2. Kill any orphaned Jupyter processes from before crash
+    kill_port(config["jupyter_port"])
+    time.sleep(1)
+
+    # 3. Clean stale Jupyter runtime files (prevent ghost kernel hangs)
+    jupyter_runtime = Path(os.environ.get(
+        "JUPYTER_RUNTIME_DIR",
+        Path.home() / "AppData" / "Roaming" / "jupyter" / "runtime"
+    ))
+    if jupyter_runtime.exists():
+        for f in jupyter_runtime.glob("*.json"):
+            try:
+                f.unlink()
+                log.info(f"Cleaned stale runtime file: {f.name}")
+            except Exception:
+                pass
+
+    # 4. Record recovery event
+    try:
+        record_jupyter_event("system_recovery", "Agent started after shutdown/crash")
+    except Exception:
+        pass
+
+    log.info("Startup recovery complete")
+
+
 # === FLASK API ===
 app = Flask(__name__)
 START_TIME = time.time()
@@ -710,6 +802,50 @@ def jupyter_events_endpoint():
     db.close()
     return jsonify([dict(r) for r in rows])
 
+@app.route("/jupyter/kernels")
+def list_kernels():
+    """List all active kernels with their status."""
+    port = config["jupyter_port"]
+    token = config["jupyter_token"]
+    try:
+        resp = req_lib.get(
+            f"http://127.0.0.1:{port}/api/kernels",
+            headers={"Authorization": f"token {token}"}, timeout=5
+        )
+        return jsonify(resp.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+@app.route("/jupyter/kernels/<kernel_id>/restart", methods=["POST"])
+def restart_kernel(kernel_id):
+    """Restart a specific kernel."""
+    port = config["jupyter_port"]
+    token = config["jupyter_token"]
+    try:
+        resp = req_lib.post(
+            f"http://127.0.0.1:{port}/api/kernels/{kernel_id}/restart",
+            headers={"Authorization": f"token {token}"}, timeout=30
+        )
+        record_jupyter_event("kernel_restart", f"kernel={kernel_id}")
+        return jsonify(resp.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
+@app.route("/jupyter/kernels/<kernel_id>/interrupt", methods=["POST"])
+def interrupt_kernel(kernel_id):
+    """Interrupt a specific kernel."""
+    port = config["jupyter_port"]
+    token = config["jupyter_token"]
+    try:
+        resp = req_lib.post(
+            f"http://127.0.0.1:{port}/api/kernels/{kernel_id}/interrupt",
+            headers={"Authorization": f"token {token}"}, timeout=10
+        )
+        record_jupyter_event("kernel_interrupt", f"kernel={kernel_id}")
+        return jsonify(resp.json() if resp.content else {"status": "ok"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
+
 @app.route("/processes")
 def processes_endpoint():
     procs = []
@@ -846,12 +982,29 @@ def write_pid():
     with open(PID_PATH, "w") as f:
         f.write(str(os.getpid()))
 
+import atexit
+
+def graceful_shutdown():
+    log.info("Agent shutting down gracefully...")
+    try:
+        record_jupyter_event("agent_shutdown", "Graceful")
+    except Exception:
+        pass
+    try:
+        db = get_db()
+        db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        db.close()
+    except Exception:
+        pass
+    log.info("Agent shutdown complete")
+
+atexit.register(graceful_shutdown)
+
 def main():
     global config
     log.info("=" * 60)
     log.info(f"ProjectHarbor Agent v2.0 starting (PID {os.getpid()})")
     log.info(f"Agent dir: {AGENT_DIR}")
-    log.info(f"Env file: {ENV_PATH}")
     log.info(f"Config: port={config['agent_port']}, jupyter_port={config['jupyter_port']}")
     log.info(f"Jupyter watchdog: {'ON' if config['jupyter_watchdog'] else 'OFF'}")
 
@@ -859,21 +1012,23 @@ def main():
     if not config.get("api_key"):
         import secrets
         config["api_key"] = secrets.token_urlsafe(32)
-        # Write to .env file (the single source of truth for secrets)
         write_env_key(ENV_PATH, "AGENT_API_KEY", config["api_key"])
         log.info(f"Generated API key and saved to {ENV_PATH}")
         log.info(f"API Key: {config['api_key']}")
-        log.info(f"This key is in your .env file under AGENT_API_KEY")
 
     log.info("=" * 60)
 
     init_db()
     write_pid()
 
+    # Startup recovery BEFORE starting threads
+    startup_recovery()
+
     # Start background threads
     MetricsThread().start()
     ProcessThread().start()
     JupyterWatchdog().start()
+    KernelHealthMonitor().start()
     CleanupThread().start()
     if config["auto_commit_enabled"]:
         AutoCommitThread().start()
@@ -910,4 +1065,6 @@ def main():
         )
 
 if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, lambda s, f: sys.exit(0))
+    signal.signal(signal.SIGINT, lambda s, f: sys.exit(0))
     main()
