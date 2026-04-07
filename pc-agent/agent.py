@@ -962,7 +962,7 @@ def config_update():
     global config
     data = request.get_json(force=True, silent=True) or {}
     for k, v in data.items():
-        if k in DEFAULT_CONFIG:
+        if k in config and k not in ("api_key", "agent_port"):
             config[k] = v
     save_config(config)
     return jsonify({"status": "updated"})

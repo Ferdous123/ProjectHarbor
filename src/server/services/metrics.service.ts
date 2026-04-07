@@ -1,4 +1,4 @@
-import { eq, desc, and, gt } from 'drizzle-orm';
+import { eq, desc, and, gt, lt } from 'drizzle-orm';
 import { getDb } from '@/server/db/client';
 import { resourceMetrics } from '@/server/db/schema';
 import { projectService } from './project.service';
@@ -85,6 +85,6 @@ export const metricsService = {
   async purgeOld(hours = 48) {
     const db = getDb();
     const cutoff = Math.floor(Date.now() / 1000) - hours * 3600;
-    await db.delete(resourceMetrics).where(gt(resourceMetrics.collectedAt, cutoff));
+    await db.delete(resourceMetrics).where(lt(resourceMetrics.collectedAt, cutoff));
   },
 };
