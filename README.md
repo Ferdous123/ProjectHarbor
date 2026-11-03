@@ -122,4 +122,4 @@ All backups run in background. Progress shown in dashboard. No UI blocking.
 
 ## License
 
-Private. Not for redistribution.
+All rights reserved. See [`LICENSE`](LICENSE).

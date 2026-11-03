@@ -36,3 +36,7 @@ pc-agent/API_KEY.txt
 pc-agent/jupyter.log
 pc-agent/*.log
 pc-agent/config.json
+
+# === LOCAL TOOLING ===
+*.tsbuildinfo
+.claude/settings.local.json
