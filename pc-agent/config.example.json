@@ -7,11 +7,13 @@
   "auto_commit_enabled": false,
   "auto_commit_interval_min": 60,
   "auto_commit_message_prefix": "auto: ",
-  "allowed_origins": ["*"],
+  "allowed_origins": [
+    "*"
+  ],
   "bind_host": "0.0.0.0",
   "_comment_jupyter": "Jupyter settings are per-instance (not per-project in this simple setup)",
   "jupyter_token": "",
   "jupyter_port": 8888,
-  "jupyter_env_path": "F:\\Research_Paper_Projects\\Thesis\\physicsdp_env",
-  "jupyter_notebook_dir": "F:\\Research_Paper_Projects\\Thesis"
+  "jupyter_env_path": "",
+  "jupyter_notebook_dir": ""
 }

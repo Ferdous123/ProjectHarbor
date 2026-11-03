@@ -59,6 +59,8 @@ cp .env.example .env
 
 # Start agent
 cd pc-agent
+cp config.example.json config.json
+# Edit config.json: set jupyter_token and the Jupyter paths (config.json is gitignored)
 pip install flask psutil requests
 python agent.py
 # Note the API key printed on first run — add to .env as AGENT_API_KEY

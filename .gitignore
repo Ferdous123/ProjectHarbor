@@ -35,3 +35,4 @@ pc-agent/agent.db
 pc-agent/API_KEY.txt
 pc-agent/jupyter.log
 pc-agent/*.log
+pc-agent/config.json
